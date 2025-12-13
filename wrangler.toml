@@ -1,0 +1,15 @@
+name = "cloudflare-svelte-printify-app"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Set these in Cloudflare dashboard for production.
+PRINTIFY_STORE_ID = ""
+ADMIN_TOKEN = ""
+
+# Printify token should be a secret in production:
+# wrangler secret put PRINTIFY_API_TOKEN
+
+[[kv_namespaces]]
+binding = "PRODUCTS_KV"
+id = "REPLACE_WITH_KV_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
