@@ -11,10 +11,11 @@ declare global {
 	namespace App {
 		interface Platform {
 			env: {
-				PRINTIFY_API_TOKEN: string;
-				PRINTIFY_STORE_ID: string;
-				ADMIN_TOKEN: string;
-				PRODUCTS_KV: KVNamespace;
+				PRINTIFY_API_TOKEN?: string;
+				PRINTIFY_STORE_ID?: string;
+				ADMIN_TOKEN?: string;
+				// Optional so deploys can succeed even if KV isn't configured yet.
+				PRODUCTS_KV?: KVNamespace;
 			};
 		}
 	}
