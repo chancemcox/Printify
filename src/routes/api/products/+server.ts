@@ -1,13 +1,21 @@
 import { json } from '@sveltejs/kit';
 import { getEnabledProductIds } from '$lib/server/kvProducts';
-import { listStoreProducts } from '$lib/server/printify';
+import { isPrintifyConfigured, listStoreProducts } from '$lib/server/printify';
 
 export async function GET(event) {
 	const env = event.platform?.env;
 	if (!env) return json({ error: 'Missing platform env' }, { status: 500 });
+	if (!isPrintifyConfigured(env)) return json({ products: [] });
 
-	const enabled = await getEnabledProductIds(env);
-	const all = await listStoreProducts(env);
+	let enabled: Set<string>;
+	let all: Awaited<ReturnType<typeof listStoreProducts>>;
+	try {
+		enabled = await getEnabledProductIds(env);
+		all = await listStoreProducts(env);
+	} catch (err) {
+		console.error('Failed to load products from Printify (API)', err);
+		return json({ products: [] }, { status: 200 });
+	}
 
 	const products = enabled.size
 		? all.filter((p) => enabled.has(p.id))

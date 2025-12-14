@@ -42,6 +42,22 @@ export type PrintifyOrderRequest = {
 
 const API_BASE = 'https://api.printify.com/v1';
 
+export function isPrintifyConfigured(env: App.Platform['env']): boolean {
+	return Boolean(env.PRINTIFY_API_TOKEN && env.PRINTIFY_STORE_ID);
+}
+
+export class PrintifyError extends Error {
+	status: number;
+	body: string;
+
+	constructor(status: number, body: string) {
+		super(`Printify API error ${status}: ${body}`);
+		this.name = 'PrintifyError';
+		this.status = status;
+		this.body = body;
+	}
+}
+
 function requireEnv(env: App.Platform['env']) {
 	if (!env.PRINTIFY_API_TOKEN) throw new Error('Missing PRINTIFY_API_TOKEN');
 	if (!env.PRINTIFY_STORE_ID) throw new Error('Missing PRINTIFY_STORE_ID');
@@ -64,7 +80,7 @@ async function printifyFetch<T>(
 
 	if (!res.ok) {
 		const body = await res.text();
-		throw new Error(`Printify API error ${res.status}: ${body}`);
+		throw new PrintifyError(res.status, body);
 	}
 
 	return (await res.json()) as T;
