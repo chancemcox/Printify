@@ -2,18 +2,23 @@ import type { Actions, PageServerLoad } from './$types';
 import { redirect, fail } from '@sveltejs/kit';
 import { isAdmin, adminCookieName } from '$lib/server/adminAuth';
 import { disableProductId, enableProductId, getEnabledProductIds } from '$lib/server/kvProducts';
-import { listStoreProducts } from '$lib/server/printify';
+import { isPrintifyConfigured, listStoreProducts } from '$lib/server/printify';
 
 export const load: PageServerLoad = async (event) => {
 	if (!(await isAdmin(event))) throw redirect(303, '/admin/login');
 
 	const env = event.platform?.env;
 	if (!env) return { products: [], enabled: [] };
+	if (!isPrintifyConfigured(env)) return { products: [], enabled: [] };
 
-	const [products, enabledSet] = await Promise.all([
-		listStoreProducts(env),
-		getEnabledProductIds(env)
-	]);
+	let products: Awaited<ReturnType<typeof listStoreProducts>> = [];
+	let enabledSet: Set<string> = new Set();
+	try {
+		[products, enabledSet] = await Promise.all([listStoreProducts(env), getEnabledProductIds(env)]);
+	} catch (err) {
+		console.error('Failed to load admin products from Printify', err);
+		return { products: [], enabled: [] };
+	}
 
 	return { products, enabled: Array.from(enabledSet) };
 };
