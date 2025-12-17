@@ -1,0 +1,488 @@
+{
+  "name": "Printify - Add Products (upload image -> create -> optional publish)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manualTrigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "publish",
+              "value": "false"
+            }
+          ],
+          "json": [
+            {
+              "name": "products",
+              "value": "={{ [\n  {\n    title: 'Example Tee',\n    description: 'Example product created via n8n',\n    blueprint_id: 6,\n    print_provider_id: 1,\n    // Provide either variants[] or variant_ids[] + price\n    variants: [\n      { id: 1, price: 1999, is_enabled: true }\n    ],\n    // Publicly accessible image URL\n    design_url: 'https://example.com/design.png',\n    file_name: 'design.png',\n    position: 'front',\n    x: 0.5,\n    y: 0.5,\n    scale: 1,\n    angle: 0,\n    visible: false,\n    publish: false\n  }\n] }}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": true
+        }
+      },
+      "id": "sampleInput",
+      "name": "Sample Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        460,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "printify/add-products",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Accepts either:\n// - Webhook body: { products: [...] } or { ...singleProduct }\n// - Direct item(s) from other nodes\n\nconst body = ($json.body ?? $json) || {};\n\nconst products = Array.isArray(body.products)\n  ? body.products\n  : (body.product ? [body.product] : (Array.isArray(body) ? body : [body]));\n\nreturn products\n  .filter((p) => p && typeof p === 'object')\n  .map((p) => ({\n    json: {\n      ...p,\n      // allow top-level publish default\n      publish: (p.publish ?? body.publish ?? false) === true,\n    }\n  }));"
+      },
+      "id": "normalize",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.printify.com/v1/uploads/images.json",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.PRINTIFY_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({\n  file_name: $json.file_name || (($json.title || 'design') + '.png'),\n  url: $json.design_url\n}) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "uploadImage",
+      "name": "Upload Design Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        940,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Printify product create payload using:\n// - current item ($json): upload image response\n// - original product: $node['Normalize Input'].json\n\nconst p = $node['Normalize Input'].json;\nconst upload = $json || {};\n\nconst imageId = upload.id ?? upload.data?.id ?? upload.image?.id;\nif (!imageId) {\n  throw new Error('Printify upload did not return an image id.');\n}\n\nconst variantIds = Array.isArray(p.variant_ids)\n  ? p.variant_ids.map((v) => Number(v)).filter((n) => Number.isFinite(n))\n  : [];\n\nlet variants = [];\nif (Array.isArray(p.variants) && p.variants.length) {\n  variants = p.variants;\n} else if (variantIds.length) {\n  const price = Number(p.price ?? 0);\n  variants = variantIds.map((id) => ({ id, price, is_enabled: true }));\n}\n\nif (!Number.isFinite(Number(p.blueprint_id)) || !Number.isFinite(Number(p.print_provider_id))) {\n  throw new Error('Missing blueprint_id or print_provider_id');\n}\nif (!Array.isArray(variants) || variants.length === 0) {\n  throw new Error('Missing variants. Provide variants[] or variant_ids[]');\n}\n\nconst placement = {\n  position: p.position ?? 'front',\n  images: [\n    {\n      id: imageId,\n      x: Number(p.x ?? 0.5),\n      y: Number(p.y ?? 0.5),\n      scale: Number(p.scale ?? 1),\n      angle: Number(p.angle ?? 0)\n    }\n  ]\n};\n\nconst payload = {\n  title: p.title ?? 'Untitled',\n  description: p.description ?? '',\n  blueprint_id: Number(p.blueprint_id),\n  print_provider_id: Number(p.print_provider_id),\n  variants,\n  print_areas: Array.isArray(p.print_areas) && p.print_areas.length\n    ? p.print_areas\n    : [\n        {\n          variant_ids: variants.map((v) => v.id),\n          placeholders: [placement]\n        }\n      ],\n  visible: p.visible ?? false\n};\n\nif (Array.isArray(p.tags)) payload.tags = p.tags;\n\nreturn [{\n  json: {\n    payload,\n    publish: !!p.publish\n  }\n}];"
+      },
+      "id": "buildPayload",
+      "name": "Build Create Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.printify.com/v1/shops/' + $env.PRINTIFY_STORE_ID + '/products.json' }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.PRINTIFY_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.payload }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "createProduct",
+      "name": "Create Printify Product",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1420,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Attach publish flag + created product\nconst publish = !!$node['Build Create Payload'].json.publish;\nreturn [{\n  json: {\n    publish,\n    product: $json\n  }\n}];"
+      },
+      "id": "attachPublish",
+      "name": "Attach Publish Flag",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.publish }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "ifPublish",
+      "name": "Publish?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.printify.com/v1/shops/' + $env.PRINTIFY_STORE_ID + '/products/' + $json.product.id + '/publish.json' }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.PRINTIFY_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({\n  title: true,\n  description: true,\n  images: true,\n  variants: true,\n  tags: true,\n  keyfeatures: true,\n  shipping_template: true\n}) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "publishProduct",
+      "name": "Publish Product",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2140,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "boolean": [
+            {
+              "name": "published",
+              "value": true
+            }
+          ],
+          "string": [
+            {
+              "name": "product_id",
+              "value": "={{ $node['Attach Publish Flag'].json.product.id }}"
+            }
+          ],
+          "json": [
+            {
+              "name": "product",
+              "value": "={{ $node['Attach Publish Flag'].json.product }}"
+            },
+            {
+              "name": "publish_response",
+              "value": "={{ $json }}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": true
+        }
+      },
+      "id": "formatPublished",
+      "name": "Format Response (Published)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        2380,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "boolean": [
+            {
+              "name": "published",
+              "value": false
+            }
+          ],
+          "string": [
+            {
+              "name": "product_id",
+              "value": "={{ $json.product.id }}"
+            }
+          ],
+          "json": [
+            {
+              "name": "product",
+              "value": "={{ $json.product }}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": true
+        }
+      },
+      "id": "formatNotPublished",
+      "name": "Format Response (Not Published)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "passThrough"
+      },
+      "id": "mergeBranches",
+      "name": "Merge Branches",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        2620,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sample Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Input": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Upload Design Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Design Image": {
+      "main": [
+        [
+          {
+            "node": "Build Create Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Create Payload": {
+      "main": [
+        [
+          {
+            "node": "Create Printify Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Printify Product": {
+      "main": [
+        [
+          {
+            "node": "Attach Publish Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Publish Flag": {
+      "main": [
+        [
+          {
+            "node": "Publish?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish?": {
+      "main": [
+        [
+          {
+            "node": "Publish Product",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Response (Not Published)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Product": {
+      "main": [
+        [
+          {
+            "node": "Format Response (Published)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response (Published)": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response (Not Published)": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Branches": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "versionId": "00000000-0000-0000-0000-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
