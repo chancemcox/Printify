@@ -107,8 +107,8 @@ resource "aws_lambda_function" "cron" {
   function_name = "${var.name_prefix}-${random_id.suffix.hex}"
   role          = aws_iam_role.lambda.arn
 
-  runtime          = "python3.12"
-  handler          = "lambda_function.lambda_handler"
+  runtime          = "nodejs20.x"
+  handler          = "index.handler"
   timeout          = var.lambda_timeout_seconds
   memory_size      = var.lambda_memory_mb
   filename         = data.archive_file.lambda_zip.output_path
