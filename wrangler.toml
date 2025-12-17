@@ -7,13 +7,29 @@ main = ".svelte-kit/cloudflare/_worker.js"
 directory = "./.svelte-kit/cloudflare"
 
 [vars]
-# Set these in Cloudflare dashboard for production.
+# Non-secret vars (safe to commit). For production, set in the Cloudflare dashboard.
 PRINTIFY_STORE_ID = ""
 ADMIN_TOKEN = ""
 ADMIN_API_TOKEN = ""
 
-# Printify token should be a secret in production:
+# Secrets:
+# - For local dev, put secrets in `.dev.vars` (this repo ignores it).
+#   Example `.dev.vars`:
+#     PRINTIFY_API_TOKEN=...
+#     PRINTIFY_STORE_ID=...
+#     ADMIN_TOKEN=...
+#     ADMIN_API_TOKEN=...
+#
+# - For production, use Wrangler secrets:
 # wrangler secret put PRINTIFY_API_TOKEN
 
 # Admin API token should be a secret in production (if you want to call /api/admin/* programmatically):
 # wrangler secret put ADMIN_API_TOKEN
+
+# Optional KV binding (recommended for persisting enabled product IDs).
+# Fill in id/preview_id after creating the KV namespace.
+#
+# [[kv_namespaces]]
+# binding = "PRODUCTS_KV"
+# id = ""
+# preview_id = ""
