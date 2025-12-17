@@ -22,13 +22,32 @@ export async function makeAdminCookieValue(adminToken: string): Promise<string> 
 	return await hmacSha256(adminToken, COOKIE_DATA);
 }
 
+function getBearerToken(req: Request): string | null {
+	const raw = req.headers.get('authorization');
+	if (!raw) return null;
+	const m = raw.match(/^Bearer\s+(.+)$/i);
+	return m?.[1]?.trim() ? m[1].trim() : null;
+}
+
 export async function isAdmin(event: {
 	cookies: { get(name: string): string | undefined };
+	request: Request;
 	platform?: App.Platform;
 }): Promise<boolean> {
-	const token = event.platform?.env.ADMIN_TOKEN;
-	if (!token) return false;
-	const expected = await makeAdminCookieValue(token);
+	const env = event.platform?.env;
+	if (!env) return false;
+
+	// API auth: allow calling admin endpoints with an Authorization header.
+	// Prefer ADMIN_API_TOKEN if set, otherwise fall back to ADMIN_TOKEN.
+	const bearer = getBearerToken(event.request);
+	if (bearer) {
+		const apiToken = env.ADMIN_API_TOKEN ?? env.ADMIN_TOKEN;
+		if (apiToken && bearer === apiToken) return true;
+	}
+
+	// UI auth: admin_session cookie is an HMAC of a fixed string with ADMIN_TOKEN.
+	if (!env.ADMIN_TOKEN) return false;
+	const expected = await makeAdminCookieValue(env.ADMIN_TOKEN);
 	const got = event.cookies.get(COOKIE_NAME);
 	return got === expected;
 }

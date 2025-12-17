@@ -10,6 +10,10 @@ directory = "./.svelte-kit/cloudflare"
 # Set these in Cloudflare dashboard for production.
 PRINTIFY_STORE_ID = ""
 ADMIN_TOKEN = ""
+ADMIN_API_TOKEN = ""
 
 # Printify token should be a secret in production:
 # wrangler secret put PRINTIFY_API_TOKEN
+
+# Admin API token should be a secret in production (if you want to call /api/admin/* programmatically):
+# wrangler secret put ADMIN_API_TOKEN
