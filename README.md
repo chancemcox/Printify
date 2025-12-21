@@ -11,12 +11,40 @@ This repo is a SvelteKit storefront intended to be deployed on Cloudflare and co
 
 ## Local development
 
-1. Install dependencies:
-   - `npm install`
-2. Configure Cloudflare bindings:
-   - Edit `wrangler.toml` (KV namespace IDs) and set vars
-3. Build (sanity check):
-   - `npm run build`
+### Prerequisites
+
+- **Node.js 20+** (required for SvelteKit 2.0 and dependencies)
+- If using `nvm`, the project includes an `.nvmrc` file - run `nvm use` to automatically switch to the correct version
+
+### Quick Start
+
+1. **Switch to Node.js 18+ (if using nvm):**
+   ```bash
+   nvm use
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+   This will start the Vite dev server at `http://localhost:5173` (or the next available port).
+
+3. **For Cloudflare-specific testing:**
+   ```bash
+   npm run dev:cloudflare
+   ```
+   This builds the project and runs it using Wrangler to simulate the Cloudflare Workers environment.
+
+### Configuration
+
+- **Environment variables:** Edit `wrangler.toml` to set your environment variables for local development
+- **Cloudflare bindings:** Configure KV namespace IDs and other bindings in `wrangler.toml` if needed
+- **Build check:** Run `npm run build` to verify the build works correctly
 
 ## Notes
 

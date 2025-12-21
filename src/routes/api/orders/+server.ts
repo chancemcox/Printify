@@ -32,6 +32,7 @@ export async function POST(event) {
 			first_name: pick(form, 'first_name'),
 			last_name: pick(form, 'last_name'),
 			email: pick(form, 'email'),
+			phone: pick(form, 'phone') || undefined,
 			country: pick(form, 'country'),
 			region: pick(form, 'region') || undefined,
 			address1: pick(form, 'address1'),

@@ -20,5 +20,10 @@ export const load: PageServerLoad = async (event) => {
 	const variants = (product.variants ?? []).filter((v) => v.is_enabled !== false);
 	const defaultVariant = variants.find((v) => v.is_default) ?? variants[0];
 
-	return { product, variants, defaultVariantId: defaultVariant?.id ?? null };
+	return { 
+		product, 
+		variants, 
+		defaultVariantId: defaultVariant?.id ?? null,
+		paypalClientId: env.PAYPAL_CLIENT_ID || ''
+	};
 };
